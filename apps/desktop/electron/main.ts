@@ -384,6 +384,10 @@ import { createPortalSession } from './portal-session'
 import { createKeepAwake } from './power-save'
 import { readPreUpdateBackupEnabled } from './pre-update-backup-config'
 import { capturePreviewContents } from './preview-capture'
+import {
+  onPreviewWatchOwnerDestroyed,
+  sendPreviewFileChangedToOwner
+} from './preview-file-watch'
 import { PreviewReachRegistry } from './preview-reach'
 import {
   createPrimaryRemoteConnection,
@@ -5801,26 +5805,19 @@ async function filePathFromPreviewUrl(rawUrl) {
   return resolvedPath
 }
 
-function sendPreviewFileChanged(payload) {
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    return
-  }
-
-  const { webContents } = mainWindow
-
-  if (!webContents || webContents.isDestroyed()) {
-    return
-  }
-
-  webContents.send('hermes:preview-file-changed', payload)
-}
-
-async function watchPreviewFile(rawUrl) {
+async function watchPreviewFile(owner, rawUrl) {
   const filePath = await filePathFromPreviewUrl(rawUrl)
   const watchDir = path.dirname(filePath)
   const targetName = path.basename(filePath)
   const id = crypto.randomBytes(12).toString('base64url')
   let timer = null
+
+  // Proactive teardown: the watch must not outlive the window that asked for
+  // it by whole quit-cycles waiting on a change event that never comes.
+  const offOwnerDestroyed = onPreviewWatchOwnerDestroyed(
+    owner,
+    () => stopPreviewFileWatch(id)
+  )
 
   const watcher = fs.watch(watchDir, (_eventType, filename) => {
     const changedName = filename ? path.basename(String(filename)) : ''
@@ -5840,12 +5837,18 @@ async function watchPreviewFile(rawUrl) {
         return
       }
 
-      sendPreviewFileChanged({ id, path: filePath, url: pathToFileURL(filePath).toString() })
+      sendPreviewFileChangedToOwner(
+        owner,
+        { id, path: filePath, url: pathToFileURL(filePath).toString() },
+        () => stopPreviewFileWatch(id)
+      )
     }, PREVIEW_WATCH_DEBOUNCE_MS)
   })
 
   previewWatchers.set(id, {
+    owner,
     close: () => {
+      offOwnerDestroyed()
       if (timer) {
         clearTimeout(timer)
       }
@@ -5891,7 +5894,7 @@ function requestOptionsWithHeaders(options: any = {}, headers = {}) {
  *  readdir poll. Same registry + change channel as the preview file watchers
  *  (the renderer reconciles on any tick; per-file edits stay on their own
  *  watches), so stopPreviewFileWatch/closePreviewWatchers manage these too. */
-function watchDirectory(rawDir) {
+function watchDirectory(owner, rawDir) {
   const watchDir = path.resolve(String(rawDir || ''))
 
   if (!fs.existsSync(watchDir) || !fs.statSync(watchDir).isDirectory()) {
@@ -5901,6 +5904,13 @@ function watchDirectory(rawDir) {
   const id = crypto.randomBytes(12).toString('base64url')
   let timer = null
 
+  // Same proactive teardown as a file watch: a closed window's directory
+  // watch must not keep polling the disk-plugin door until quit.
+  const offOwnerDestroyed = onPreviewWatchOwnerDestroyed(
+    owner,
+    () => stopPreviewFileWatch(id)
+  )
+
   const watcher = fs.watch(watchDir, () => {
     if (timer) {
       clearTimeout(timer)
@@ -5908,12 +5918,18 @@ function watchDirectory(rawDir) {
 
     timer = setTimeout(() => {
       timer = null
-      sendPreviewFileChanged({ id, path: watchDir, url: pathToFileURL(watchDir).toString() })
+      sendPreviewFileChangedToOwner(
+        owner,
+        { id, path: watchDir, url: pathToFileURL(watchDir).toString() },
+        () => stopPreviewFileWatch(id)
+      )
     }, PREVIEW_WATCH_DEBOUNCE_MS)
   })
 
   previewWatchers.set(id, {
+    owner,
     close: () => {
+      offOwnerDestroyed()
       if (timer) {
         clearTimeout(timer)
       }
@@ -16898,9 +16914,13 @@ ipcMain.handle('hermes:normalizePreviewTarget', (_event, target, baseDir) =>
   normalizePreviewTarget(String(target || ''), baseDir ? String(baseDir) : '')
 )
 
-ipcMain.handle('hermes:watchPreviewFile', (_event, url) => watchPreviewFile(String(url || '')))
+ipcMain.handle('hermes:watchPreviewFile', (event, url) =>
+  watchPreviewFile(event.sender, String(url || ''))
+)
 
-ipcMain.handle('hermes:watchDirectory', (_event, dir) => watchDirectory(String(dir || '')))
+ipcMain.handle('hermes:watchDirectory', (event, dir) =>
+  watchDirectory(event.sender, String(dir || ''))
+)
 
 ipcMain.handle('hermes:stopPreviewFileWatch', (_event, id) => stopPreviewFileWatch(String(id || '')))
 
