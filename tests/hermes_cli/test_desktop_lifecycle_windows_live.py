@@ -26,6 +26,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.live_process_fixtures import sleeper_script_path
+
 pytestmark = pytest.mark.windows_only
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -56,7 +58,7 @@ def sleeper():
 
     def _spawn(*tail: str) -> subprocess.Popen:
         p = subprocess.Popen(
-            [sys.executable, "-c", "import time; time.sleep(120)", *tail],
+            [sys.executable, sleeper_script_path(), *tail],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )

@@ -25,11 +25,12 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
 import pytest
+
+from tests.live_process_fixtures import sleeper_script_path
 
 pytestmark = [
     pytest.mark.skipif(sys.platform != "win32", reason="live Windows venv-holder E2E"),
@@ -41,27 +42,6 @@ pytestmark = [
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
-_SLEEPER_SOURCE = "import time\ntime.sleep(300)\n"
-_sleeper_script: Path | None = None
-
-
-def _sleeper_path() -> Path:
-    """Path to the sleeper SCRIPT the fixtures run.
-
-    Not ``python -c "import time; time.sleep(300)" <tail>``: a ``-c`` command line is an
-    interpreter running inline source, and the identity matchers refuse to read the trailing argv
-    off one — that tail is data for a program the inline source may spawn LATER, which is exactly
-    how the post-update restart watcher was mistaken for a live gateway (#107002). Running the
-    sleeper from a file keeps these fixtures shaped like the real processes they stand in for.
-    """
-    global _sleeper_script
-    if _sleeper_script is None:
-        path = Path(tempfile.mkdtemp(prefix="hermes-live-sleeper-")) / "sleeper.py"
-        path.write_text(_SLEEPER_SOURCE, encoding="utf-8")
-        _sleeper_script = path
-    return _sleeper_script
-
-
 def _spawn(args: list[str], cwd: Path | None = None, python: str | None = None) -> subprocess.Popen:
     """Spawn a real sleeper process whose argv carries the given tail.
 
@@ -70,7 +50,7 @@ def _spawn(args: list[str], cwd: Path | None = None, python: str | None = None) 
     code classifies on.
     """
     proc = subprocess.Popen(
-        [python or sys.executable, str(_sleeper_path()), *args],
+        [python or sys.executable, sleeper_script_path(), *args],
         cwd=str(cwd or PROJECT_ROOT),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -118,8 +98,7 @@ class TestDetection:
         lives in the checkout's ``.venv``, which ``project_venv_dir`` resolves since
         7a94b1fbf77, so a ``sys.executable`` child IS a venv holder by design. The base
         interpreter the venv was created from is the foreign python."""
-        import tempfile
-
+        
         from hermes_constants import project_venv_dir
 
         base = getattr(sys, "_base_executable", None) or sys.executable
