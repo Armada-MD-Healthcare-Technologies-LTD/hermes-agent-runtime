@@ -2645,6 +2645,7 @@ export interface Translations {
     skillsLabel: string
     notSet: string
     soulDesc: string
+    soulMissing: string
     soulOptional: string
     soulPlaceholder: (mode: string) => string
     soulPlaceholderCloned: string
