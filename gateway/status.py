@@ -501,6 +501,34 @@ def _read_process_cmdline(pid: int) -> Optional[str]:
     return None
 
 
+# ``-c``, and the combined short-option spellings CPython accepts for it (``-uc``, ``-Ic``…).
+_INLINE_SOURCE_FLAG_RE = re.compile(r"-[A-Za-z]*c")
+
+
+def command_line_runs_inline_source(tokens: list[str]) -> bool:
+    """True when *tokens* is an interpreter running INLINE SOURCE (``python -c <src> [args]``).
+
+    Everything after ``-c`` is data the inline program receives, not this process's own identity.
+    The detached gateway restart watcher (``gateway._spawn_gateway_restart_watcher``) is spawned as
+    ``python -c <watcher source> <old_pid> <python> -m hermes_cli.main gateway run``: its trailing
+    argv is the command the watcher will LATER spawn, so every argv matcher used to read it as a
+    live gateway. See #107002 and the "never infer process identity from argv substrings" rule.
+
+    Only interpreter options may precede ``-c``; the first non-option token ends the option block
+    (``python -m hermes_cli.main …`` therefore never matches).
+    """
+    for token in tokens[1:]:
+        if _INLINE_SOURCE_FLAG_RE.fullmatch(token):
+            return True
+        if not token.startswith("-"):
+            return False
+    return False
+
+
+# ``-c``, and the combined short-option spellings CPython accepts for it (``-uc``, ``-Ic``…).
+_INLINE_SOURCE_FLAG_RE = re.compile(r"-[A-Za-z]*c")
+
+
 def _gateway_command_subcommand(command: str | None) -> str | None:
     """Hermes gateway lifecycle subcommand from a command line, or None. No loose substring matches
     (``"gateway" in cmdline`` also matched ``gateway status`` / ``python -m tui_gateway``): needs a
@@ -518,6 +546,10 @@ def _gateway_command_subcommand(command: str | None) -> str | None:
     if not tokens:
         return None
     basenames = [t.rsplit("/", 1)[-1] for t in tokens]
+    # ``python -c <src> … -m hermes_cli.main gateway run``: the trailing argv belongs to the program
+    # the inline source will spawn later, not to this process (#107002).
+    if command_line_runs_inline_source(tokens):
+        return None
     # The launchd job's osascript wrapper (gateway_launchd.launchd_program_arguments) carries the gateway argv
     # inside one AppleScript string; the gateway itself is its child and is matched on its own command line.
     if basenames[0] == "osascript":

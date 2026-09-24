@@ -25,6 +25,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -40,15 +41,36 @@ pytestmark = [
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
+_SLEEPER_SOURCE = "import time\ntime.sleep(300)\n"
+_sleeper_script: Path | None = None
+
+
+def _sleeper_path() -> Path:
+    """Path to the sleeper SCRIPT the fixtures run.
+
+    Not ``python -c "import time; time.sleep(300)" <tail>``: a ``-c`` command line is an
+    interpreter running inline source, and the identity matchers refuse to read the trailing argv
+    off one — that tail is data for a program the inline source may spawn LATER, which is exactly
+    how the post-update restart watcher was mistaken for a live gateway (#107002). Running the
+    sleeper from a file keeps these fixtures shaped like the real processes they stand in for.
+    """
+    global _sleeper_script
+    if _sleeper_script is None:
+        path = Path(tempfile.mkdtemp(prefix="hermes-live-sleeper-")) / "sleeper.py"
+        path.write_text(_SLEEPER_SOURCE, encoding="utf-8")
+        _sleeper_script = path
+    return _sleeper_script
+
+
 def _spawn(args: list[str], cwd: Path | None = None, python: str | None = None) -> subprocess.Popen:
     """Spawn a real sleeper process whose argv carries the given tail.
 
-    ``python -c "sleep" <tail...>`` — the tail is inert data to the child
+    ``python <sleeper.py> <tail...>`` — the tail is inert data to the child
     but fully visible to psutil cmdline scans, which is what the detection
     code classifies on.
     """
     proc = subprocess.Popen(
-        [python or sys.executable, "-c", "import time; time.sleep(300)", *args],
+        [python or sys.executable, str(_sleeper_path()), *args],
         cwd=str(cwd or PROJECT_ROOT),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -487,3 +509,32 @@ class TestUpdaterOwnedBackendDeferral:
             )
         finally:
             _kill(backend)
+
+
+class TestPostUpdateRelaunchWatcherIdentity:
+    """#107002 — the detached gateway restart watcher must never be counted as a live gateway.
+
+    ``hermes update``'s post-relaunch verification polls ``find_gateway_pids`` and vouches for
+    whatever it finds. The watcher is spawned as
+    ``python -c <watcher source> <old_pid> <python> -m hermes_cli.main gateway run``, so an argv
+    read that ignores ``-c`` vouches for the watcher itself instead of a gateway.
+    """
+
+    def test_live_restart_watcher_is_not_counted_as_a_gateway(self):
+        from hermes_cli.gateway import find_gateway_pids
+        from hermes_cli.update_cmd import _classify_concurrent_instance
+
+        # A real restart watcher: inline source that waits on a PID that never exits, carrying the
+        # gateway argv it would spawn afterwards.
+        watcher = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(300)", str(os.getpid()),
+             sys.executable, "-m", "hermes_cli.main", "gateway", "run"],
+            cwd=str(PROJECT_ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        time.sleep(0.8)
+        try:
+            assert watcher.poll() is None, "watcher stand-in died at spawn"
+            assert watcher.pid not in find_gateway_pids(all_profiles=True)
+            assert _classify_concurrent_instance(watcher.pid) == "non-gateway"
+        finally:
+            _kill(watcher)

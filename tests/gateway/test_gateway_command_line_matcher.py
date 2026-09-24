@@ -58,3 +58,27 @@ def test_accepts_real_gateway_run(cmd):
     assert matches(cmd) is True
 
 
+@pytest.mark.parametrize("cmd", REJECT)
+def test_rejects_non_gateway_run(cmd):
+    assert matches(cmd) is False
+
+
+# ``python -c <src> <old_pid> <gateway argv…>`` — the detached restart watcher
+# (hermes_cli.gateway._spawn_gateway_restart_watcher). Its trailing argv is the command it will
+# spawn LATER, so reading identity off it made the updater's post-relaunch liveness poll vouch for
+# the watcher instead of a gateway (#107002).
+INLINE_SOURCE_REJECT = [
+    'python -c "import time; time.sleep(1)" 14980 python -m hermes_cli.main gateway run',
+    r'"C:\Users\me\hermes\venv\Scripts\python.exe" -c "import os" 14980 '
+    r'"C:\Users\me\hermes\venv\Scripts\python.exe" -m hermes_cli.main gateway run',
+    'python -u -c "import os" 14980 python -m hermes_cli.main --profile work gateway run',
+    'python -uc "import os" 14980 hermes gateway run',
+]
+
+
+@pytest.mark.parametrize("cmd", INLINE_SOURCE_REJECT)
+def test_rejects_interpreter_running_inline_source(cmd):
+    assert matches(cmd) is False
+    assert matches_runtime(cmd) is False
+
+
