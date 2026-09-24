@@ -388,8 +388,8 @@ jobs:
           # A correctly-shaped tag on an unreviewed commit is NOT a valid
           # build input for a release-signing workflow: only a commit that
           # is already an ancestor of origin/main may be built.
-          git fetch origin main
-          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+          git fetch origin fake-main
+          if ! git merge-base --is-ancestor "$SHA" origin/fake-main; then
             echo "::error::tag $TAG (${SHA:0:12}) is not an ancestor of origin/main — refusing to build from an unreviewed commit"
             exit 1
           fi
@@ -2058,7 +2058,7 @@ jobs:
           if release['tagName'] != tag or release['isDraft']:
               raise ValueError('Previous package must come from a published release')
           commit = subprocess.check_output(['git', 'rev-parse', '--verify', f'refs/tags/{tag}^{{commit}}'], text=True).strip()
-          subprocess.run(['git', 'merge-base', '--is-ancestor', commit, 'origin/main'], check=True)
+          subprocess.run(['git', 'merge-base', '--is-ancestor', commit, 'origin/fake-main'], check=True)
           fetch(tag, commit, ['termux'], Path('termux-build/previous'), ['deb/*.deb'])
           PY
 

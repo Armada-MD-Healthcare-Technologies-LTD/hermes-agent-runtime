@@ -48,7 +48,7 @@ def _claim_commit(repo: Path, tag: str) -> str:
 def _refresh_claims(repo: Path, remote: str) -> None:
     _git(
         repo, "fetch", remote,
-        "+refs/heads/main:refs/remotes/hermes-release/main",
+        "+refs/heads/fake-main:refs/remotes/hermes-release/main",
         *(f"+refs/tags/{glob}:refs/tags/{glob}" for glob in _ATTEMPT_GLOBS),
     )
 
@@ -59,7 +59,7 @@ def _require_remote_main(repo: Path, commit: str) -> None:
         cwd=repo, capture_output=True,
     )
     if result.returncode != 0:
-        raise ReleaseRefused(f"{commit} is not on origin/main")
+        raise ReleaseRefused(f"{commit} is not on origin/fake-main")
 
 
 def _claim_collision(repo: Path, remote: str, tag: str, error: Exception) -> ReleaseRefused:

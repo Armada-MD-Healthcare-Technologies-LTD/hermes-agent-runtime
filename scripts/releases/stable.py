@@ -383,7 +383,7 @@ def check_claim(env: dict, run=output) -> dict:
             or (expected_object and remote_object != expected_object)
             or run(["git", "rev-parse", "HEAD"]) != commit):
         raise ValueError("Stable claim tag or checkout moved")
-    run(["git", "fetch", "origin", "+refs/heads/main:refs/remotes/origin/main"])
+    run(["git", "fetch", "origin", "+refs/heads/fake-main:refs/remotes/origin/main"])
 
     def on_main(sha: str) -> bool:
         try:
@@ -435,7 +435,7 @@ def final_context(env: dict, run=output) -> tuple[str, str, dict]:
             or not refs.get(f"refs/tags/{tag}")):
         raise ValueError("Final release tag custody changed")
 
-    run(["git", "fetch", "origin", "+refs/heads/main:refs/remotes/origin/main",
+    run(["git", "fetch", "origin", "+refs/heads/fake-main:refs/remotes/origin/main",
          f"+refs/tags/{claim_tag}:refs/tags/{claim_tag}",
          f"+refs/tags/{tag}:refs/tags/{tag}"])
     for receipt, expected_object in ((claim_tag, claim_object),
