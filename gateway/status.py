@@ -525,10 +525,6 @@ def command_line_runs_inline_source(tokens: list[str]) -> bool:
     return False
 
 
-# ``-c``, and the combined short-option spellings CPython accepts for it (``-uc``, ``-Ic``…).
-_INLINE_SOURCE_FLAG_RE = re.compile(r"-[A-Za-z]*c")
-
-
 def _gateway_command_subcommand(command: str | None) -> str | None:
     """Hermes gateway lifecycle subcommand from a command line, or None. No loose substring matches
     (``"gateway" in cmdline`` also matched ``gateway status`` / ``python -m tui_gateway``): needs a
