@@ -250,20 +250,24 @@ class TestAncestorExclusion:
             " 'pids': [p for p, _, _ in matches]}))\n",
             encoding="utf-8",
         )
-        parent_oneliner = (
-            "import subprocess, sys;"
-            f" r = subprocess.run([sys.executable, {str(child_file)!r}],"
-            f" capture_output=True, text=True, cwd={str(PROJECT_ROOT)!r});"
-            " print(r.stdout.strip());"
-            " sys.stderr.write(r.stderr[-500:])"
+        # The parent's code lives in a FILE too: a ``python -c <src>`` command line is an
+        # interpreter running inline source and carries no readable Hermes identity (#107002),
+        # so a ``-c`` parent would not be a gateway to any classifier.
+        parent_file = tmp_path / "parent_gateway.py"
+        parent_file.write_text(
+            "import subprocess, sys\n"
+            f"r = subprocess.run([sys.executable, {str(child_file)!r}],\n"
+            f"    capture_output=True, text=True, cwd={str(PROJECT_ROOT)!r})\n"
+            "print(r.stdout.strip())\n"
+            "sys.stderr.write(r.stderr[-500:])\n",
+            encoding="utf-8",
         )
         # The parent's argv carries `gateway run` so it IS a gateway to any
         # cmdline classifier; it runs the child synchronously.
         result = subprocess.run(
             [
                 sys.executable,
-                "-c",
-                parent_oneliner,
+                str(parent_file),
                 "-m",
                 "hermes_cli.main",
                 "gateway",
