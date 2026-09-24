@@ -19,6 +19,11 @@ from pathlib import Path
 _SLEEPER_SOURCE = "import time\ntime.sleep(300)\n"
 _sleeper_script: Path | None = None
 
+#: Substring a caller can wait for in the spawned process's *command line* to know the argv is
+#: visible to a cmdline scan. It must name the SCRIPT, not its source text: the source now lives in
+#: a file and never appears in the command line the way a ``-c`` snippet used to.
+SLEEPER_MARKER = "sleeper.py"
+
 
 def sleeper_script_path() -> str:
     """Path to the sleeper script, created once per test session."""

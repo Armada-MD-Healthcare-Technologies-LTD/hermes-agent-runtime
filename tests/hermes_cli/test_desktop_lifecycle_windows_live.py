@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.live_process_fixtures import sleeper_script_path
+from tests.live_process_fixtures import SLEEPER_MARKER, sleeper_script_path
 
 pytestmark = pytest.mark.windows_only
 
@@ -63,7 +63,7 @@ def sleeper():
             stderr=subprocess.DEVNULL,
         )
         procs.append(p)
-        assert _wait_until(lambda: _argv_visible(p.pid, "time.sleep(120)")), "sleeper argv never visible"
+        assert _wait_until(lambda: _argv_visible(p.pid, SLEEPER_MARKER)), "sleeper argv never visible"
         return p
 
     yield _spawn

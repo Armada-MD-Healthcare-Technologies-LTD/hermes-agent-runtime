@@ -21,7 +21,7 @@ sys.path.insert(0, str(WORKTREE))
 
 import pytest
 
-from tests.live_process_fixtures import sleeper_script_path
+from tests.live_process_fixtures import SLEEPER_MARKER, sleeper_script_path
 
 # The stand-in wears a `gateway run` argv; the test spawns and reaps it itself.
 pytestmark = [pytest.mark.windows_only, pytest.mark.spawns_gateway_lookalike]
@@ -65,7 +65,7 @@ def test_plan_reconciliation_live_windows(tmp_path, monkeypatch):
     )
     try:
         assert _wait_until(lambda: _argv_visible(child.pid, "gateway")), "stand-in argv never visible"
-        assert _wait_until(lambda: _argv_visible(foreign.pid, "time.sleep(120)")), "sleeper never visible"
+        assert _wait_until(lambda: _argv_visible(foreign.pid, SLEEPER_MARKER)), "sleeper never visible"
 
         import psutil
 
