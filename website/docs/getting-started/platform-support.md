@@ -53,6 +53,12 @@ PRs to fix them will _not_ be accepted, and any code that keeps compatibility wi
 - Android / Termux on non-aarch64 devices (aarch64 is [supported](./termux.md) via our APT package)
 - installs via the AUR (we might upstream patches if it helps out &lt;3)
 - 32-bit x86 macOS. Intel x86_64 has native bundle build and package-update acceptance lanes; this does not change the Tier 1 priority for Apple Silicon.
+  > The prebuilt macOS desktop installer (Hermes-Setup.dmg) is Apple Silicon
+  > only — it ships a single arm64 binary. On an Intel Mac the installer
+  > reports "not supported on this Mac"; install the
+  > [CLI](./installation.md#linux--macos--wsl2--android-termux) instead and
+  > run `hermes desktop`, which builds the app for your machine's own
+  > architecture (#99033).
 - installs via `pypi` (e.g. `uv tool install hermes-agent`, `pip install hermes-agent`, etc.)
 - installs via `brew` (`brew install hermes-agent`)
 
