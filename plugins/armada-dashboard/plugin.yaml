@@ -1,0 +1,4 @@
+name: armada-dashboard
+version: 1.0.0
+description: Authenticated metadata projection of this gateway's private dashboard.
+author: Armada MD

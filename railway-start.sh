@@ -11,6 +11,9 @@ model:
   api_mode: chat_completions
 terminal:
   backend: none
+plugins:
+  enabled:
+    - armada-dashboard
 platforms:
   api_server:
     enabled: true
