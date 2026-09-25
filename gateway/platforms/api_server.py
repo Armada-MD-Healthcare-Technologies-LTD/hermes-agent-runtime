@@ -99,6 +99,41 @@ _CAPABILITY_ENDPOINTS = (
     ("browser_control_ws", ("GET", "/v1/browser-control/ws")),
     ("artifact_upload", ("POST", "/v1/artifacts/upload")),
     ("artifact_download", ("GET", "/v1/artifacts/download/{artifact_id}")))
+_VOICE_CONVERSATION_MODEL_DEFAULT = "openai/gpt-5.6-luna"
+_VOICE_CONVERSATION_MAX_HISTORY = 10
+_VOICE_CONVERSATION_MAX_TEXT = 6000
+_VOICE_CONVERSATION_PROMPT = (
+    "You are Hermes, the conversational control interface for Armada MD's ULTRACOMM. "
+    "Speak as one integrated operator surface. Conductor is the execution authority behind this interface; "
+    "do not volunteer internal component separation or say that you are disconnected from Conductor. "
+    "This endpoint is conversation-only: never claim that work executed, never claim a mission was accepted, "
+    "and never invent runtime capabilities. If the user asks for work to be executed, tell them the objective "
+    "will be routed through ULTRACOMM Conductor by the operator interface. Be concise and conversational."
+)
+
+
+def _voice_conversation_messages(body: Any) -> tuple[List[Dict[str, str]], str]:
+    """Validate the conversation-only voice payload and build a bounded provider prompt."""
+    if not isinstance(body, dict):
+        raise ValueError("invalid_voice_conversation")
+    text = body.get("text")
+    if not isinstance(text, str) or not text.strip() or len(text) > _VOICE_CONVERSATION_MAX_TEXT:
+        raise ValueError("invalid_voice_conversation_text")
+    raw_history = body.get("history", [])
+    if not isinstance(raw_history, list) or len(raw_history) > _VOICE_CONVERSATION_MAX_HISTORY:
+        raise ValueError("invalid_voice_conversation_history")
+    messages: List[Dict[str, str]] = [{"role": "system", "content": _VOICE_CONVERSATION_PROMPT}]
+    for item in raw_history:
+        if not isinstance(item, dict):
+            raise ValueError("invalid_voice_conversation_history")
+        role, content = item.get("role"), item.get("content")
+        if role not in {"user", "assistant"} or not isinstance(content, str) or len(content) > _VOICE_CONVERSATION_MAX_TEXT:
+            raise ValueError("invalid_voice_conversation_history")
+        messages.append({"role": role, "content": content})
+    clean = text.strip()
+    messages.append({"role": "user", "content": clean})
+    return messages, clean
+
 _BROWSER_CONTROL_WS_PROTOCOL = "hermes-browser-control-v1"
 _BROWSER_CONTROL_TICKET_PROTOCOL_PREFIX = "hermes-browser-control-ticket."
 
@@ -1621,6 +1656,7 @@ class APIServerAdapter(OpenAICompatRoutesMixin, BasePlatformAdapter):
             ("POST", "/api/sessions/{session_id}/chat", self._handle_session_chat),
             ("POST", "/api/sessions/{session_id}/chat/stream", self._handle_session_chat_stream),
             ("POST", "/api/sessions/{session_id}/model", self._handle_session_model_lock),
+            ("POST", "/api/voice/converse", self._handle_voice_converse),
             ("POST", "/v1/chat/completions", self._handle_chat_completions),
             ("POST", "/v1/responses", self._handle_responses),
             ("GET", "/v1/responses/{response_id}", self._handle_get_response),
@@ -2292,6 +2328,65 @@ class APIServerAdapter(OpenAICompatRoutesMixin, BasePlatformAdapter):
     async def _handle_health(self, request: "web.Request") -> "web.Response":
         """GET /health — simple health check."""
         return web.json_response({"status": "ok", "platform": "hermes-agent", "version": _hermes_version()})
+
+    @_require_auth
+    async def _handle_voice_converse(self, request: "web.Request") -> "web.Response":
+        """Low-latency, conversation-only voice lane. It never exposes agent tools or execution authority."""
+        from aiohttp import ClientSession, ClientTimeout
+        try:
+            body = await request.json()
+            messages, _ = _voice_conversation_messages(body)
+        except Exception:
+            return _invalid_request("Invalid voice conversation request")
+        api_key = str(os.environ.get("OPENROUTER_API_KEY") or "").strip()
+        if not api_key:
+            return _error_response("Voice conversation provider is not configured", 503, code="voice_provider_unavailable")
+        model = str(os.environ.get("HERMES_VOICE_CHAT_MODEL") or _VOICE_CONVERSATION_MODEL_DEFAULT).strip()
+        if not re.match(r"^[A-Za-z0-9_.:/-]{1,160}$", model):
+            model = _VOICE_CONVERSATION_MODEL_DEFAULT
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+            "temperature": 0.2,
+            "max_tokens": 500,
+            "reasoning": {"enabled": False},
+        }
+        try:
+            timeout = ClientTimeout(total=15)
+            async with ClientSession(timeout=timeout) as session:
+                async with session.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                        "X-Title": "Armada Hermes Voice",
+                    },
+                    json=payload,
+                ) as upstream:
+                    raw = await upstream.content.read(65_537)
+                    if len(raw) > 65_536:
+                        return _error_response("Voice provider response too large", 502, code="voice_provider_invalid")
+                    if upstream.status != 200:
+                        logger.warning("[api_server] voice converse provider refused status=%s", upstream.status)
+                        return _error_response("Voice conversation provider unavailable", 503, code="voice_provider_unavailable")
+        except Exception:
+            logger.warning("[api_server] voice converse provider request failed", exc_info=True)
+            return _error_response("Voice conversation provider unavailable", 503, code="voice_provider_unavailable")
+        try:
+            data = json.loads(raw.decode("utf-8"))
+            reply = data["choices"][0]["message"]["content"].strip()
+        except Exception:
+            return _error_response("Voice provider returned an invalid response", 502, code="voice_provider_invalid")
+        if not reply or len(reply) > _VOICE_CONVERSATION_MAX_TEXT:
+            return _error_response("Voice provider returned an invalid response", 502, code="voice_provider_invalid")
+        return web.json_response({
+            "ok": True,
+            "reply": reply,
+            "executionEnabled": False,
+            "provider": "openrouter",
+            "model": model,
+        })
 
     @_require_auth
     async def _handle_health_detailed(self, request: "web.Request") -> "web.Response":
