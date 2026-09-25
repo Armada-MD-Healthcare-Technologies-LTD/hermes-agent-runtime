@@ -1,8 +1,9 @@
 FROM nousresearch/hermes-agent:latest@sha256:d4da4a40cd7a28aba983775d9fd31d94cbf153eeb0cb9e844d6d0f612b7c24db
 ENV API_SERVER_HOST=0.0.0.0
+ENV PYTHONPATH=/opt/hermes/armada-runtime-patch:/opt/hermes
+COPY railway_patch/sitecustomize.py /opt/hermes/armada-runtime-patch/sitecustomize.py
+RUN python -c "import gateway.platforms.api_server as a; assert hasattr(a.APIServerAdapter, '_handle_voice_converse')"
 COPY --chmod=0755 railway-start.sh /opt/hermes/railway-start.sh
-COPY gateway/platforms/api_server.py /opt/hermes/gateway/platforms/api_server.py
-RUN python -m py_compile /opt/hermes/gateway/platforms/api_server.py
 COPY plugins/armada-dashboard /opt/hermes/plugins/armada-dashboard
 EXPOSE 8642
 CMD ["/opt/hermes/railway-start.sh"]
