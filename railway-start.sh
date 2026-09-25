@@ -3,9 +3,10 @@ set -eu
 mkdir -p "${HERMES_HOME:-/opt/data}"
 cat > "${HERMES_HOME:-/opt/data}/config.yaml" <<'YAML'
 model:
-  provider: openrouter
-  default: openai/gpt-6-luna-pro
-  base_url: https://openrouter.ai/api/v1
+  provider: custom
+  default: gpt-5.4
+  base_url: https://api.openai.com/v1
+  api_key: "${OPENAI_API_KEY}"
   api_mode: chat_completions
 gateway:
   trust_env: true
