@@ -35,11 +35,19 @@ def project_payload(path: str, payload: object) -> object:
                 raise ValueError('invalid_dashboard_skill')
             if not SAFE_NAME.fullmatch(item['name']):
                 raise ValueError('invalid_dashboard_skill_name')
+            provenance = item.get('provenance')
+            if provenance is not None and not isinstance(provenance, str):
+                raise ValueError('invalid_dashboard_skill_provenance')
             result.append({'name': item['name'], 'enabled': item.get('enabled') is True,
-                           'provenance': item.get('provenance') if item.get('provenance')
-                           in {'bundled', 'hub', 'agent'} else 'unknown'})
+                           'provenance': provenance if provenance in {'bundled', 'hub', 'agent'} else 'unknown'})
         return result
     raise ValueError('dashboard_projection_path_not_allowed')
+
+
+def default_profile_request():
+    from gateway.platforms.api_server import _api_request_profile
+    from hermes_cli.profiles import get_active_profile_name
+    return _api_request_profile.get() in (None, 'default') and get_active_profile_name() == 'default'
 
 
 def wire(native, adapter):
@@ -56,6 +64,8 @@ def wire(native, adapter):
         denial = adapter._check_auth(request)
         if denial is not None:
             return denial
+        if not default_profile_request():
+            return web.json_response({'error': 'dashboard_profile_not_supported'}, status=403, headers=HEADERS)
         if request.method != 'GET':
             return web.json_response({'error': 'dashboard_management_not_exposed'}, status=405, headers=HEADERS)
         path = '/' + request.match_info['tail']

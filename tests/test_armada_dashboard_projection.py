@@ -32,6 +32,8 @@ class ProjectionTests(unittest.IsolatedAsyncioTestCase):
         await self.upstream.start_server()
         self.env = patch.dict(os.environ, {'HERMES_DASHBOARD_SESSION_TOKEN': 't'*40})
         self.env.start()
+        self.profile = patch.object(projection, 'default_profile_request', return_value=True)
+        self.profile.start()
         self.base = patch.object(projection, 'UPSTREAM', str(self.upstream.make_url('')).rstrip('/'))
         self.base.start()
         gateway = web.Application()
@@ -44,6 +46,7 @@ class ProjectionTests(unittest.IsolatedAsyncioTestCase):
         await self.upstream.close()
         self.base.stop()
         self.env.stop()
+        self.profile.stop()
 
     async def request(self, path='/api/status', method='GET', auth=True):
         return await self.client.request(method, '/armada-dashboard'+path,
@@ -102,6 +105,16 @@ class ProjectionTests(unittest.IsolatedAsyncioTestCase):
     async def test_malformed_skill_never_leaks_value(self):
         self.payload=[{'name':'secret\nvalue'}]
         r=await self.request('/api/skills');self.assertEqual(r.status,503)
+
+    async def test_secondary_profile_is_rejected_before_upstream(self):
+        with patch.object(projection, 'default_profile_request', return_value=False):
+            r=await self.request();self.assertEqual(r.status,403)
+        self.assertEqual(self.seen,[])
+
+    async def test_non_string_provenance_is_rejected(self):
+        for value in ([],{}):
+            self.payload=[{'name':'test','provenance':value}]
+            r=await self.request('/api/skills');self.assertEqual(r.status,503)
 
     def test_registration_uses_existing_gateway(self):
         calls=[]

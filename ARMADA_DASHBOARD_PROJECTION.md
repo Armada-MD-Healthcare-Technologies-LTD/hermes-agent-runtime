@@ -24,3 +24,7 @@ Qualification uses the exact currently deployed base-image digest, with no netwo
 credentials. Tests cover real HTTP auth, status/skills readback, redaction, missing auth, blocked
 mutations/config/profile requests, malformed responses and response-size limits.
 Existing model/provider configuration, public gateway listener, Orgo voice and ULTRACOMM are unchanged.
+
+The referenced `API_SERVER_KEY` must exist in Railway Variables, not only as an in-process export.
+The current service was verified to provision it and render the internal reference identically.
+Named/multiplexed profiles are refused before reading the default dashboard credential.
