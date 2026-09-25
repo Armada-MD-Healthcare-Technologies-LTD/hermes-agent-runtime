@@ -1,7 +1,8 @@
 #!/bin/sh
 set -eu
-mkdir -p "${HERMES_HOME:-/opt/data}"
-cat > "${HERMES_HOME:-/opt/data}/config.yaml" <<'YAML'
+HOME_DIR="${HERMES_HOME:-/opt/data}"
+mkdir -p "$HOME_DIR"
+cat > "$HOME_DIR/config.yaml" <<'YAML'
 model:
   provider: custom
   default: gpt-5.4
@@ -10,13 +11,17 @@ model:
   api_mode: chat_completions
 terminal:
   backend: none
+platforms:
+  api_server:
+    enabled: true
+    extra:
+      host: 0.0.0.0
+      port: 8642
+      model_name: hermes-agent
+      key: "${HERMES_GATEWAY_AUTH}"
 gateway:
   trust_env: true
   strict: false
-  api_server:
-    max_concurrent_runs: 10
-    history_tool_output_max_chars: 0
 YAML
 export API_SERVER_KEY="${HERMES_GATEWAY_AUTH:?HERMES_GATEWAY_AUTH required}"
-echo "railway-start: api_key_len=${#API_SERVER_KEY} host=${API_SERVER_HOST:-unset} port=${API_SERVER_PORT:-unset} model=${API_SERVER_MODEL_NAME:-unset}"
 exec hermes gateway run --no-supervise
