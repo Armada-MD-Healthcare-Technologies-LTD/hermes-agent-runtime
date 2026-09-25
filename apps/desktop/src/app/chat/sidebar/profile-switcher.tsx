@@ -299,16 +299,16 @@ export function ProfileRail() {
   const condensed = profiles.length + countRestAgents(restGroups) > PROFILE_DROPDOWN_THRESHOLD
 
   const switchToRest = (agent: FleetAgent) => {
-    const key = fleetRouteKey(agent.connectionId, agent.profile)
-    triggerHaptic('selection')
-    setPendingRoute(key)
+    const commitRestSwitch = (target: FleetAgent) => {
+      const key = fleetRouteKey(target.connectionId, target.profile)
+      triggerHaptic('selection')
+      setPendingRoute(key)
 
-    void selectConnection(agent.connectionId, { profile: agent.profile })
-      .catch((error: unknown) => notifyError(error, p.switchConnectionFailed(agent.connectionLabel)))
-      .finally(() => setPendingRoute(current => (current === key ? null : current)))
-  }
+      void selectConnection(target.connectionId, { profile: target.profile })
+        .catch((error: unknown) => notifyError(error, p.switchConnectionFailed(target.connectionLabel)))
+        .finally(() => setPendingRoute(current => (current === key ? null : current)))
+    }
 
-  const switchToRest = (agent: FleetAgent) => {
     if (agent.connectionKind !== 'local') {
       commitRestSwitch(agent)
 
