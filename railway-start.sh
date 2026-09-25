@@ -14,4 +14,5 @@ gateway:
     max_concurrent_runs: 10
     history_tool_output_max_chars: 0
 YAML
+export API_SERVER_KEY="${HERMES_GATEWAY_AUTH:?HERMES_GATEWAY_AUTH required}"
 exec hermes gateway run --no-supervise
