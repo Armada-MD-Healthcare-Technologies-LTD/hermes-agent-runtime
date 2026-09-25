@@ -1,8 +1,5 @@
-# Railway deployment wrapper for the upstream Hermes Agent image.
-# Avoids Railway parsing/building the full upstream multi-stage Dockerfile.
 FROM nousresearch/hermes-agent:latest
-
 ENV API_SERVER_HOST=0.0.0.0
+COPY --chmod=0755 railway-start.sh /opt/hermes/railway-start.sh
 EXPOSE 8642
-
-CMD ["gateway", "run"]
+CMD ["/opt/hermes/railway-start.sh"]
