@@ -3115,6 +3115,7 @@ function runGit(args, options: any = {}): Promise<{ code: number; stdout: string
     const gitBinary = resolveGitBinary()
     const gitArgs = IS_WINDOWS ? ['-c', 'windows.appendAtomically=false', ...args] : args
     const host = IS_WINDOWS ? windowsGitHost(true) : null
+
     const plan = planNoConsoleGitSpawn({
       gitBin: gitBinary,
       args: gitArgs,
