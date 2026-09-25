@@ -5,6 +5,9 @@ Split out of ``tools/browser_tool.py``. Facade-owned state is read through ``_bt
 import functools
 import os
 import shutil
+import sys
+from pathlib import Path
+from typing import Optional
 
 from hermes_constants import agent_browser_runnable, is_termux as _is_termux_environment
 from tools.browser_tool_origin import origin_module as _origin
@@ -43,6 +46,22 @@ def _merge_browser_path(existing_path: str = "") -> str:
         if part and part not in path_parts and part not in prefix_parts and os.path.isdir(part):
             prefix_parts.append(part)
     return os.pathsep.join(prefix_parts + path_parts)
+
+
+def _is_npx_agent_browser_sentinel(browser_cmd: str) -> bool:
+    return browser_cmd.endswith("agent-browser") and "node_modules" not in browser_cmd
+
+
+def _requires_real_termux_browser_install(browser_cmd: str) -> bool:
+    return False
+
+
+def _termux_browser_install_error() -> str:
+    return "agent-browser CLI is not installed"
+
+
+def _resolve_npx_bin() -> Optional[str]:
+    return shutil.which("agent-browser")
 
 
 def _browser_install_hint() -> str:
