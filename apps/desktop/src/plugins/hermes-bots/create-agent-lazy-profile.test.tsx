@@ -341,9 +341,7 @@ describe('provider readiness before the intro turn', () => {
       { id: 'local', label: 'This Mac' },
       { id: 'studio', label: 'Studio' }
     ])
-    mocks.requestProfile.mockImplementation(async (_route: unknown, method: string) =>
-      method === 'setup.runtime_check' ? notReady : {}
-    )
+    mocks.requestProfile.mockImplementation(async () => notReady)
 
     await renderDialog(true, vi.fn())
     await screen.findByText('Create on')
